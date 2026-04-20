@@ -1,9 +1,11 @@
 const canvas = document.getElementById("gameCanvas");
 const ctx = canvas.getContext("2d");
 const healthValue = document.getElementById("healthValue");
+const healthBar = document.getElementById("healthBar");
 const scoreValue = document.getElementById("scoreValue");
 const waveValue = document.getElementById("waveValue");
 const statusValue = document.getElementById("statusValue");
+const baseBar = document.getElementById("baseBar");
 const restartButton = document.getElementById("restartButton");
 
 const WIDTH = canvas.width;
@@ -16,6 +18,8 @@ const PLAYER_SPEED = 170;
 const ENEMY_SPEED = 92;
 const BULLET_SPEED = 360;
 const BASE_SIZE = 46;
+const PLAYER_MAX_HP = 3;
+const BASE_MAX_HP = 3;
 
 const keys = new Set();
 
@@ -76,7 +80,7 @@ function createPlayer() {
     size: 28,
     dirX: 0,
     dirY: -1,
-    hp: 3,
+    hp: PLAYER_MAX_HP,
     shootCooldown: 0,
     invulnerable: 1.5
   };
@@ -129,7 +133,7 @@ function resetGame() {
     mode: "running",
     score: 0,
     wave: 1,
-    baseHp: 3,
+    baseHp: BASE_MAX_HP,
     player: createPlayer(),
     enemiesRemaining: 0,
     waveClearTimer: 0
@@ -173,9 +177,14 @@ function spawnWave() {
 }
 
 function syncHud() {
-  healthValue.textContent = String(gameState.player.hp);
+  const playerHp = Math.max(0, gameState.player.hp);
+  const baseHp = Math.max(0, gameState.baseHp);
+
+  healthValue.textContent = `${playerHp} / ${PLAYER_MAX_HP}`;
+  healthBar.style.width = `${(playerHp / PLAYER_MAX_HP) * 100}%`;
   scoreValue.textContent = String(gameState.score);
   waveValue.textContent = String(gameState.wave);
+  baseBar.style.width = `${(baseHp / BASE_MAX_HP) * 100}%`;
   if (gameState.mode === "running" && gameState.enemiesRemaining > 0) {
     statusValue.textContent = `剩余敌军 ${gameState.enemiesRemaining}`;
   }
@@ -356,71 +365,84 @@ function updateBullets(dt, pool) {
       continue;
     }
 
-    bullet.x += bullet.vx * dt;
-    bullet.y += bullet.vy * dt;
+    const travel = Math.max(Math.abs(bullet.vx * dt), Math.abs(bullet.vy * dt));
+    const steps = Math.max(1, Math.ceil(travel / (bullet.radius * 1.5)));
+    const stepX = (bullet.vx * dt) / steps;
+    const stepY = (bullet.vy * dt) / steps;
 
-    if (
-      bullet.x < -bullet.radius ||
-      bullet.x > WIDTH + bullet.radius ||
-      bullet.y < -bullet.radius ||
-      bullet.y > HEIGHT + bullet.radius
-    ) {
-      bullet.active = false;
-      continue;
-    }
+    for (let step = 0; step < steps; step += 1) {
+      bullet.x += stepX;
+      bullet.y += stepY;
 
-    if (bulletHitsBlock(bullet)) {
-      continue;
-    }
-
-    if (
-      bullet.owner === "enemy" &&
-      bullet.x + bullet.radius > base.x - base.size / 2 &&
-      bullet.x - bullet.radius < base.x + base.size / 2 &&
-      bullet.y + bullet.radius > base.y - base.size / 2 &&
-      bullet.y - bullet.radius < base.y + base.size / 2
-    ) {
-      bullet.active = false;
-      gameState.baseHp -= 1;
-      if (gameState.baseHp <= 0) {
-        gameState.mode = "lost";
-        statusValue.textContent = "基地被摧毁";
-      }
-      continue;
-    }
-
-    if (
-      bullet.owner === "enemy" &&
-      player.invulnerable === 0 &&
-      circleRectCollision(bullet, player)
-    ) {
-      bullet.active = false;
-      player.hp -= 1;
-      player.invulnerable = 1.2;
-      if (player.hp <= 0) {
-        gameState.mode = "lost";
-        statusValue.textContent = "你的坦克已被击毁";
-      }
-      continue;
-    }
-
-    if (bullet.owner === "player") {
-      for (const enemy of enemies) {
-        if (!enemy.active || !circleRectCollision(bullet, enemy)) {
-          continue;
-        }
+      if (
+        bullet.x < -bullet.radius ||
+        bullet.x > WIDTH + bullet.radius ||
+        bullet.y < -bullet.radius ||
+        bullet.y > HEIGHT + bullet.radius
+      ) {
         bullet.active = false;
-        enemy.hp -= 1;
-        if (enemy.hp <= 0) {
-          enemy.active = false;
-          gameState.score += 100;
-          gameState.enemiesRemaining -= 1;
-          if (gameState.enemiesRemaining === 0) {
-            gameState.waveClearTimer = 1.1;
-            statusValue.textContent = "本波清空，准备下一波";
-          }
+        break;
+      }
+
+      if (bulletHitsBlock(bullet)) {
+        break;
+      }
+
+      if (
+        bullet.owner === "enemy" &&
+        player.invulnerable === 0 &&
+        circleRectCollision(bullet, player)
+      ) {
+        bullet.active = false;
+        player.hp -= 1;
+        player.invulnerable = 1.2;
+        statusValue.textContent = `玩家受击，剩余生命 ${Math.max(0, player.hp)}`;
+        if (player.hp <= 0) {
+          gameState.mode = "lost";
+          statusValue.textContent = "你的坦克已被击毁";
         }
         break;
+      }
+
+      if (
+        bullet.owner === "enemy" &&
+        bullet.x + bullet.radius > base.x - base.size / 2 &&
+        bullet.x - bullet.radius < base.x + base.size / 2 &&
+        bullet.y + bullet.radius > base.y - base.size / 2 &&
+        bullet.y - bullet.radius < base.y + base.size / 2
+      ) {
+        bullet.active = false;
+        gameState.baseHp -= 1;
+        if (gameState.baseHp <= 0) {
+          gameState.mode = "lost";
+          statusValue.textContent = "基地被摧毁";
+        }
+        break;
+      }
+
+      if (bullet.owner === "player") {
+        let hitEnemy = false;
+        for (const enemy of enemies) {
+          if (!enemy.active || !circleRectCollision(bullet, enemy)) {
+            continue;
+          }
+          bullet.active = false;
+          enemy.hp -= 1;
+          if (enemy.hp <= 0) {
+            enemy.active = false;
+            gameState.score += 100;
+            gameState.enemiesRemaining -= 1;
+            if (gameState.enemiesRemaining === 0) {
+              gameState.waveClearTimer = 1.1;
+              statusValue.textContent = "本波清空，准备下一波";
+            }
+          }
+          hitEnemy = true;
+          break;
+        }
+        if (hitEnemy) {
+          break;
+        }
       }
     }
   }
@@ -443,7 +465,7 @@ function updateWave(dt) {
     gameState.waveClearTimer -= dt;
     if (gameState.waveClearTimer <= 0) {
       gameState.wave += 1;
-      gameState.baseHp = Math.min(3, gameState.baseHp + 1);
+      gameState.baseHp = Math.min(BASE_MAX_HP, gameState.baseHp + 1);
       spawnWave();
     }
   }

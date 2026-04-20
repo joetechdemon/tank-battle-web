@@ -25,7 +25,10 @@
       <section class="dashboard" aria-label="游戏信息">
         <div class="stat-card">
           <span class="stat-label">生命</span>
-          <strong id="healthValue">3</strong>
+          <strong id="healthValue">3 / 3</strong>
+          <div class="meter" aria-hidden="true">
+            <div id="healthBar" class="meter-fill"></div>
+          </div>
         </div>
         <div class="stat-card">
           <span class="stat-label">得分</span>
@@ -38,6 +41,9 @@
         <div class="stat-card status-card">
           <span class="stat-label">状态</span>
           <strong id="statusValue">准备开火</strong>
+          <div class="meter" aria-hidden="true">
+            <div id="baseBar" class="meter-fill meter-fill-base"></div>
+          </div>
         </div>
       </section>
 
