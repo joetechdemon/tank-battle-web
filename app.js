@@ -20,6 +20,7 @@ const BULLET_SPEED = 360;
 const BASE_SIZE = 46;
 const PLAYER_MAX_HP = 3;
 const BASE_MAX_HP = 3;
+const PLAYER_SPAWN_PREFERENCE = { x: WIDTH / 2, y: HEIGHT - 88 };
 const ENEMY_SPAWN_POINTS = [
   { x: 64, y: 48 },
   { x: 240, y: 48 },
@@ -83,10 +84,10 @@ function createEnemy(active) {
   };
 }
 
-function createPlayer() {
+function createPlayer(spawnPoint) {
   return {
-    x: WIDTH / 2,
-    y: HEIGHT - 88,
+    x: spawnPoint.x,
+    y: spawnPoint.y,
     size: 28,
     dirX: 0,
     dirY: -1,
@@ -137,14 +138,66 @@ function buildMap() {
   return blocks;
 }
 
+function overlapsAt(size, nextX, nextY) {
+  const probe = { size };
+  return overlapsObstacle(probe, nextX, nextY);
+}
+
+function overlapsBaseAt(size, nextX, nextY) {
+  const half = size / 2;
+  const baseHalf = BASE_SIZE / 2;
+  const left = nextX - half;
+  const right = nextX + half;
+  const top = nextY - half;
+  const bottom = nextY + half;
+  const baseLeft = WIDTH / 2 - baseHalf;
+  const baseRight = WIDTH / 2 + baseHalf;
+  const baseTop = HEIGHT - 34 - baseHalf;
+  const baseBottom = HEIGHT - 34 + baseHalf;
+
+  return (
+    right > baseLeft &&
+    left < baseRight &&
+    bottom > baseTop &&
+    top < baseBottom
+  );
+}
+
+function findSafeSpawnPoint(preferredX, preferredY, size) {
+  if (!overlapsAt(size, preferredX, preferredY) && !overlapsBaseAt(size, preferredX, preferredY)) {
+    return { x: preferredX, y: preferredY };
+  }
+
+  const offsets = [0, -TILE / 2, TILE / 2, -TILE, TILE, -(TILE * 1.5), TILE * 1.5, -TILE * 2, TILE * 2];
+
+  for (const offsetY of offsets) {
+    for (const offsetX of offsets) {
+      const x = preferredX + offsetX;
+      const y = preferredY + offsetY;
+      const clampedX = Math.max(size / 2, Math.min(WIDTH - size / 2, x));
+      const clampedY = Math.max(size / 2, Math.min(HEIGHT - size / 2, y));
+      if (!overlapsAt(size, clampedX, clampedY) && !overlapsBaseAt(size, clampedX, clampedY)) {
+        return { x: clampedX, y: clampedY };
+      }
+    }
+  }
+
+  return { x: preferredX, y: preferredY };
+}
+
 function resetGame() {
   obstacles = buildMap();
+  const playerSpawn = findSafeSpawnPoint(
+    PLAYER_SPAWN_PREFERENCE.x,
+    PLAYER_SPAWN_PREFERENCE.y,
+    28
+  );
   gameState = {
     mode: "running",
     score: 0,
     wave: 1,
     baseHp: BASE_MAX_HP,
-    player: createPlayer(),
+    player: createPlayer(playerSpawn),
     enemiesRemaining: 0,
     waveClearTimer: 0
   };
