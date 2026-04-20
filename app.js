@@ -20,6 +20,16 @@ const BULLET_SPEED = 360;
 const BASE_SIZE = 46;
 const PLAYER_MAX_HP = 3;
 const BASE_MAX_HP = 3;
+const ENEMY_SPAWN_POINTS = [
+  { x: 64, y: 48 },
+  { x: 240, y: 48 },
+  { x: 464, y: 48 },
+  { x: 688, y: 48 },
+  { x: 112, y: 112 },
+  { x: 208, y: 112 },
+  { x: 560, y: 112 },
+  { x: 752, y: 112 }
+];
 
 const keys = new Set();
 
@@ -155,18 +165,19 @@ function deactivatePool(pool) {
 
 function spawnWave() {
   const activeCount = Math.min(MAX_ENEMIES, 3 + gameState.wave);
-  const lanes = [80, 240, 400, 560, 720];
   for (let i = 0; i < enemies.length; i += 1) {
     const enemy = enemies[i];
     if (i < activeCount) {
+      const spawnPoint = ENEMY_SPAWN_POINTS[i % ENEMY_SPAWN_POINTS.length];
       enemy.active = true;
-      enemy.x = lanes[i % lanes.length];
-      enemy.y = 70 + Math.floor(i / lanes.length) * 52;
+      enemy.x = spawnPoint.x;
+      enemy.y = spawnPoint.y;
       enemy.dirX = 0;
       enemy.dirY = 1;
       enemy.fireCooldown = 0.6 + i * 0.2;
       enemy.moveCooldown = 0.2 * i;
       enemy.hp = 1;
+      retargetEnemy(enemy, gameState.player);
     } else {
       enemy.active = false;
     }
@@ -230,6 +241,50 @@ function overlapsObstacle(entity, nextX, nextY) {
   return false;
 }
 
+function canTravel(entity, dirX, dirY, distance = TILE * 0.75) {
+  return !overlapsObstacle(entity, entity.x + dirX * distance, entity.y + dirY * distance);
+}
+
+function buildEnemyDirectionCandidates(enemy, player) {
+  const dx = player.x - enemy.x;
+  const dy = player.y - enemy.y;
+  const horizontal = [Math.sign(dx || 1), 0];
+  const vertical = [0, Math.sign(dy || 1)];
+  const fallback = [
+    [1, 0],
+    [-1, 0],
+    [0, 1],
+    [0, -1]
+  ];
+  const preferred =
+    Math.abs(dx) > Math.abs(dy) ? [horizontal, vertical] : [vertical, horizontal];
+  const seen = new Set();
+  const candidates = [];
+
+  for (const [dirX, dirY] of [...preferred, ...fallback]) {
+    const key = `${dirX},${dirY}`;
+    if (seen.has(key) || (dirX === 0 && dirY === 0)) {
+      continue;
+    }
+    seen.add(key);
+    candidates.push([dirX, dirY]);
+  }
+
+  return candidates;
+}
+
+function retargetEnemy(enemy, player) {
+  for (const [dirX, dirY] of buildEnemyDirectionCandidates(enemy, player)) {
+    if (canTravel(enemy, dirX, dirY)) {
+      enemy.dirX = dirX;
+      enemy.dirY = dirY;
+      return;
+    }
+  }
+  enemy.dirX = 0;
+  enemy.dirY = 1;
+}
+
 function updatePlayer(dt) {
   const player = gameState.player;
   let moveX = 0;
@@ -291,15 +346,7 @@ function updateEnemies(dt) {
     enemy.fireCooldown -= dt;
 
     if (enemy.moveCooldown <= 0) {
-      const dx = player.x - enemy.x;
-      const dy = player.y - enemy.y;
-      if (Math.abs(dx) > Math.abs(dy)) {
-        enemy.dirX = Math.sign(dx);
-        enemy.dirY = 0;
-      } else {
-        enemy.dirX = 0;
-        enemy.dirY = Math.sign(dy || 1);
-      }
+      retargetEnemy(enemy, player);
       enemy.moveCooldown = 0.45 + Math.random() * 0.5;
     }
 
@@ -308,12 +355,14 @@ function updateEnemies(dt) {
     if (!overlapsObstacle(enemy, nextX, enemy.y)) {
       enemy.x = nextX;
     } else {
-      enemy.dirX *= -1;
+      retargetEnemy(enemy, player);
+      enemy.moveCooldown = 0.1;
     }
     if (!overlapsObstacle(enemy, enemy.x, nextY)) {
       enemy.y = nextY;
     } else {
-      enemy.dirY *= -1;
+      retargetEnemy(enemy, player);
+      enemy.moveCooldown = 0.1;
     }
     clampEntity(enemy);
 
