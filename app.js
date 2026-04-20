@@ -1,5 +1,7 @@
 const canvas = document.getElementById("gameCanvas");
 const ctx = canvas.getContext("2d");
+const minimapCanvas = document.getElementById("minimapCanvas");
+const minimapCtx = minimapCanvas.getContext("2d");
 const healthValue = document.getElementById("healthValue");
 const healthBar = document.getElementById("healthBar");
 const scoreValue = document.getElementById("scoreValue");
@@ -8,31 +10,65 @@ const statusValue = document.getElementById("statusValue");
 const baseBar = document.getElementById("baseBar");
 const restartButton = document.getElementById("restartButton");
 
-const WIDTH = canvas.width;
-const HEIGHT = canvas.height;
+const VIEWPORT_WIDTH = canvas.width;
+const VIEWPORT_HEIGHT = canvas.height;
 const TILE = 32;
-const MAX_PLAYER_BULLETS = 10;
-const MAX_ENEMY_BULLETS = 18;
-const MAX_ENEMIES = 8;
-const PLAYER_SPEED = 170;
-const ENEMY_SPEED = 92;
+const WORLD_COLS = 40;
+const WORLD_ROWS = 28;
+const WORLD_WIDTH = WORLD_COLS * TILE;
+const WORLD_HEIGHT = WORLD_ROWS * TILE;
+const MAX_PLAYER_BULLETS = 12;
+const MAX_ENEMY_BULLETS = 24;
+const MAX_ENEMIES = 10;
+const PLAYER_SPEED = 176;
+const ENEMY_SPEED = 94;
 const BULLET_SPEED = 360;
 const BASE_SIZE = 46;
 const PLAYER_MAX_HP = 3;
 const BASE_MAX_HP = 3;
-const PLAYER_SPAWN_PREFERENCE = { x: WIDTH / 2, y: HEIGHT - 88 };
-const ENEMY_SPAWN_POINTS = [
-  { x: 64, y: 48 },
-  { x: 240, y: 48 },
-  { x: 464, y: 48 },
-  { x: 688, y: 48 },
-  { x: 112, y: 112 },
-  { x: 208, y: 112 },
-  { x: 560, y: 112 },
-  { x: 752, y: 112 }
+const BASE_POSITION = { x: WORLD_WIDTH / 2, y: WORLD_HEIGHT - 56 };
+const PLAYER_SPAWN_PREFERENCE = { x: BASE_POSITION.x, y: BASE_POSITION.y - 112 };
+const MAP_CLUSTERS = [
+  { kind: "brick", col: 2, row: 1, width: 3, height: 2 },
+  { kind: "steel", col: 8, row: 1, width: 4, height: 1 },
+  { kind: "brick", col: 16, row: 1, width: 3, height: 2 },
+  { kind: "steel", col: 24, row: 1, width: 4, height: 1 },
+  { kind: "brick", col: 32, row: 1, width: 3, height: 2 },
+  { kind: "brick", col: 5, row: 4, width: 2, height: 3 },
+  { kind: "steel", col: 11, row: 4, width: 5, height: 1 },
+  { kind: "brick", col: 20, row: 4, width: 3, height: 2 },
+  { kind: "steel", col: 27, row: 4, width: 2, height: 3 },
+  { kind: "brick", col: 33, row: 4, width: 4, height: 1 },
+  { kind: "brick", col: 1, row: 8, width: 5, height: 1 },
+  { kind: "steel", col: 8, row: 8, width: 3, height: 2 },
+  { kind: "brick", col: 14, row: 8, width: 4, height: 1 },
+  { kind: "steel", col: 22, row: 8, width: 4, height: 2 },
+  { kind: "brick", col: 29, row: 8, width: 5, height: 1 },
+  { kind: "steel", col: 36, row: 8, width: 2, height: 2 },
+  { kind: "brick", col: 4, row: 12, width: 3, height: 2 },
+  { kind: "steel", col: 10, row: 12, width: 2, height: 4 },
+  { kind: "brick", col: 15, row: 13, width: 8, height: 1 },
+  { kind: "brick", col: 26, row: 12, width: 3, height: 2 },
+  { kind: "steel", col: 32, row: 12, width: 2, height: 4 },
+  { kind: "brick", col: 6, row: 17, width: 4, height: 1 },
+  { kind: "steel", col: 13, row: 17, width: 3, height: 2 },
+  { kind: "brick", col: 20, row: 16, width: 2, height: 4 },
+  { kind: "steel", col: 25, row: 17, width: 3, height: 2 },
+  { kind: "brick", col: 31, row: 17, width: 4, height: 1 },
+  { kind: "brick", col: 3, row: 21, width: 3, height: 2 },
+  { kind: "steel", col: 8, row: 21, width: 2, height: 3 },
+  { kind: "brick", col: 12, row: 22, width: 4, height: 1 },
+  { kind: "steel", col: 24, row: 21, width: 2, height: 3 },
+  { kind: "brick", col: 28, row: 22, width: 4, height: 1 },
+  { kind: "brick", col: 34, row: 21, width: 3, height: 2 },
+  { kind: "brick", col: 14, row: 24, width: 2, height: 2 },
+  { kind: "steel", col: 24, row: 24, width: 2, height: 2 },
+  { kind: "brick", col: 17, row: 25, width: 2, height: 1 },
+  { kind: "brick", col: 21, row: 25, width: 2, height: 1 }
 ];
 
 const keys = new Set();
+const camera = { x: 0, y: Math.max(0, WORLD_HEIGHT - VIEWPORT_HEIGHT) };
 
 const playerBullets = Array.from({ length: MAX_PLAYER_BULLETS }, createBullet);
 const enemyBullets = Array.from({ length: MAX_ENEMY_BULLETS }, createBullet);
@@ -42,12 +78,18 @@ let obstacles = [];
 let gameState = null;
 let previousTime = 0;
 
+window.__tankBattle = {
+  VIEWPORT_WIDTH,
+  VIEWPORT_HEIGHT,
+  WORLD_WIDTH,
+  WORLD_HEIGHT
+};
+
 document.addEventListener("keydown", (event) => {
-  const code = event.code;
-  if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space"].includes(code)) {
+  if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space"].includes(event.code)) {
     event.preventDefault();
   }
-  keys.add(code);
+  keys.add(event.code);
 });
 
 document.addEventListener("keyup", (event) => {
@@ -97,35 +139,11 @@ function createPlayer(spawnPoint) {
   };
 }
 
-function buildMap() {
-  const blocks = [];
-  const layout = [
-    "..........................",
-    "...bb.....sss.....bb......",
-    "...bb..............bb.....",
-    "........bbbbbb............",
-    "..sss..............sss....",
-    "...........bb.............",
-    "......bb........bb........",
-    "........ssssssss..........",
-    "..........................",
-    "......bb....bb....bb......",
-    "..........................",
-    "...........bbbb...........",
-    "..........................",
-    "...........bssb...........",
-    "...........b..b...........",
-    "...........bbbb..........."
-  ];
-
-  for (let row = 0; row < layout.length; row += 1) {
-    for (let col = 0; col < layout[row].length; col += 1) {
-      const tile = layout[row][col];
-      if (tile === ".") {
-        continue;
-      }
+function addCluster(blocks, cluster) {
+  for (let row = cluster.row; row < cluster.row + cluster.height; row += 1) {
+    for (let col = cluster.col; col < cluster.col + cluster.width; col += 1) {
       blocks.push({
-        kind: tile === "b" ? "brick" : "steel",
+        kind: cluster.kind,
         x: col * TILE,
         y: row * TILE,
         w: TILE,
@@ -134,142 +152,14 @@ function buildMap() {
       });
     }
   }
+}
 
+function buildMap() {
+  const blocks = [];
+  for (const cluster of MAP_CLUSTERS) {
+    addCluster(blocks, cluster);
+  }
   return blocks;
-}
-
-function overlapsAt(size, nextX, nextY) {
-  const probe = { size };
-  return overlapsObstacle(probe, nextX, nextY);
-}
-
-function overlapsBaseAt(size, nextX, nextY) {
-  const half = size / 2;
-  const baseHalf = BASE_SIZE / 2;
-  const left = nextX - half;
-  const right = nextX + half;
-  const top = nextY - half;
-  const bottom = nextY + half;
-  const baseLeft = WIDTH / 2 - baseHalf;
-  const baseRight = WIDTH / 2 + baseHalf;
-  const baseTop = HEIGHT - 34 - baseHalf;
-  const baseBottom = HEIGHT - 34 + baseHalf;
-
-  return (
-    right > baseLeft &&
-    left < baseRight &&
-    bottom > baseTop &&
-    top < baseBottom
-  );
-}
-
-function findSafeSpawnPoint(preferredX, preferredY, size) {
-  if (!overlapsAt(size, preferredX, preferredY) && !overlapsBaseAt(size, preferredX, preferredY)) {
-    return { x: preferredX, y: preferredY };
-  }
-
-  const offsets = [0, -TILE / 2, TILE / 2, -TILE, TILE, -(TILE * 1.5), TILE * 1.5, -TILE * 2, TILE * 2];
-
-  for (const offsetY of offsets) {
-    for (const offsetX of offsets) {
-      const x = preferredX + offsetX;
-      const y = preferredY + offsetY;
-      const clampedX = Math.max(size / 2, Math.min(WIDTH - size / 2, x));
-      const clampedY = Math.max(size / 2, Math.min(HEIGHT - size / 2, y));
-      if (!overlapsAt(size, clampedX, clampedY) && !overlapsBaseAt(size, clampedX, clampedY)) {
-        return { x: clampedX, y: clampedY };
-      }
-    }
-  }
-
-  return { x: preferredX, y: preferredY };
-}
-
-function resetGame() {
-  obstacles = buildMap();
-  const playerSpawn = findSafeSpawnPoint(
-    PLAYER_SPAWN_PREFERENCE.x,
-    PLAYER_SPAWN_PREFERENCE.y,
-    28
-  );
-  gameState = {
-    mode: "running",
-    score: 0,
-    wave: 1,
-    baseHp: BASE_MAX_HP,
-    player: createPlayer(playerSpawn),
-    enemiesRemaining: 0,
-    waveClearTimer: 0
-  };
-  deactivatePool(playerBullets);
-  deactivatePool(enemyBullets);
-  for (const enemy of enemies) {
-    enemy.active = false;
-  }
-  spawnWave();
-  syncHud();
-}
-
-function deactivatePool(pool) {
-  for (const item of pool) {
-    item.active = false;
-  }
-}
-
-function spawnWave() {
-  const activeCount = Math.min(MAX_ENEMIES, 3 + gameState.wave);
-  for (let i = 0; i < enemies.length; i += 1) {
-    const enemy = enemies[i];
-    if (i < activeCount) {
-      const spawnPoint = ENEMY_SPAWN_POINTS[i % ENEMY_SPAWN_POINTS.length];
-      enemy.active = true;
-      enemy.x = spawnPoint.x;
-      enemy.y = spawnPoint.y;
-      enemy.dirX = 0;
-      enemy.dirY = 1;
-      enemy.fireCooldown = 0.6 + i * 0.2;
-      enemy.moveCooldown = 0.2 * i;
-      enemy.hp = 1;
-      retargetEnemy(enemy, gameState.player);
-    } else {
-      enemy.active = false;
-    }
-  }
-  gameState.enemiesRemaining = activeCount;
-  gameState.waveClearTimer = 0;
-  statusValue.textContent = `第 ${gameState.wave} 波进攻中`;
-}
-
-function syncHud() {
-  const playerHp = Math.max(0, gameState.player.hp);
-  const baseHp = Math.max(0, gameState.baseHp);
-
-  healthValue.textContent = `${playerHp} / ${PLAYER_MAX_HP}`;
-  healthBar.style.width = `${(playerHp / PLAYER_MAX_HP) * 100}%`;
-  scoreValue.textContent = String(gameState.score);
-  waveValue.textContent = String(gameState.wave);
-  baseBar.style.width = `${(baseHp / BASE_MAX_HP) * 100}%`;
-  if (gameState.mode === "running" && gameState.enemiesRemaining > 0) {
-    statusValue.textContent = `剩余敌军 ${gameState.enemiesRemaining}`;
-  }
-}
-
-function spawnBullet(pool, x, y, dirX, dirY, owner) {
-  const bullet = pool.find((item) => !item.active);
-  if (!bullet) {
-    return;
-  }
-  bullet.active = true;
-  bullet.owner = owner;
-  bullet.x = x;
-  bullet.y = y;
-  bullet.vx = dirX * BULLET_SPEED;
-  bullet.vy = dirY * BULLET_SPEED;
-}
-
-function clampEntity(entity) {
-  entity.x = Math.max(entity.size / 2, Math.min(WIDTH - entity.size / 2, entity.x));
-  entity.y = Math.max(entity.size / 2, Math.min(HEIGHT - entity.size / 2, entity.y));
 }
 
 function overlapsObstacle(entity, nextX, nextY) {
@@ -292,6 +182,166 @@ function overlapsObstacle(entity, nextX, nextY) {
     }
   }
   return false;
+}
+
+function overlapsAt(size, nextX, nextY) {
+  return overlapsObstacle({ size }, nextX, nextY);
+}
+
+function overlapsBaseAt(size, nextX, nextY) {
+  const half = size / 2;
+  const baseHalf = BASE_SIZE / 2;
+  const left = nextX - half;
+  const right = nextX + half;
+  const top = nextY - half;
+  const bottom = nextY + half;
+  const baseLeft = BASE_POSITION.x - baseHalf;
+  const baseRight = BASE_POSITION.x + baseHalf;
+  const baseTop = BASE_POSITION.y - baseHalf;
+  const baseBottom = BASE_POSITION.y + baseHalf;
+
+  return right > baseLeft && left < baseRight && bottom > baseTop && top < baseBottom;
+}
+
+function findSafeSpawnPoint(preferredX, preferredY, size, searchRows) {
+  if (!overlapsAt(size, preferredX, preferredY) && !overlapsBaseAt(size, preferredX, preferredY)) {
+    return { x: preferredX, y: preferredY };
+  }
+
+  for (const offsetY of searchRows) {
+    for (let offsetX = 0; offsetX <= TILE * 6; offsetX += TILE / 2) {
+      const candidates = offsetX === 0 ? [0] : [-offsetX, offsetX];
+      for (const offset of candidates) {
+        const x = preferredX + offset;
+        const y = preferredY + offsetY;
+        const clampedX = Math.max(size / 2, Math.min(WORLD_WIDTH - size / 2, x));
+        const clampedY = Math.max(size / 2, Math.min(WORLD_HEIGHT - size / 2, y));
+        if (!overlapsAt(size, clampedX, clampedY) && !overlapsBaseAt(size, clampedX, clampedY)) {
+          return { x: clampedX, y: clampedY };
+        }
+      }
+    }
+  }
+
+  return { x: preferredX, y: preferredY };
+}
+
+function findEnemySpawnPoints(count) {
+  const points = [];
+  const scanRows = [48, 96, 144, 192];
+  const minDistance = TILE * 3;
+
+  for (const y of scanRows) {
+    for (let x = TILE * 1.5; x <= WORLD_WIDTH - TILE * 1.5; x += TILE) {
+      if (overlapsAt(28, x, y) || overlapsBaseAt(28, x, y)) {
+        continue;
+      }
+      if (points.some((point) => Math.hypot(point.x - x, point.y - y) < minDistance)) {
+        continue;
+      }
+      points.push({ x, y });
+      if (points.length === count) {
+        return points;
+      }
+    }
+  }
+
+  return points;
+}
+
+function clampEntity(entity) {
+  entity.x = Math.max(entity.size / 2, Math.min(WORLD_WIDTH - entity.size / 2, entity.x));
+  entity.y = Math.max(entity.size / 2, Math.min(WORLD_HEIGHT - entity.size / 2, entity.y));
+}
+
+function deactivatePool(pool) {
+  for (const item of pool) {
+    item.active = false;
+  }
+}
+
+function resetGame() {
+  obstacles = buildMap();
+  const playerSpawn = findSafeSpawnPoint(
+    PLAYER_SPAWN_PREFERENCE.x,
+    PLAYER_SPAWN_PREFERENCE.y,
+    28,
+    [0, -TILE, -TILE / 2, TILE / 2, TILE, -(TILE * 1.5), TILE * 1.5]
+  );
+  const enemySpawnPoints = findEnemySpawnPoints(MAX_ENEMIES);
+
+  gameState = {
+    mode: "running",
+    score: 0,
+    wave: 1,
+    baseHp: BASE_MAX_HP,
+    player: createPlayer(playerSpawn),
+    enemiesRemaining: 0,
+    waveClearTimer: 0,
+    enemySpawnPoints
+  };
+
+  deactivatePool(playerBullets);
+  deactivatePool(enemyBullets);
+  for (const enemy of enemies) {
+    enemy.active = false;
+  }
+
+  spawnWave();
+  updateCamera();
+  syncHud();
+}
+
+function spawnWave() {
+  const activeCount = Math.min(MAX_ENEMIES, 4 + gameState.wave);
+  for (let i = 0; i < enemies.length; i += 1) {
+    const enemy = enemies[i];
+    if (i < activeCount) {
+      const spawnPoint = gameState.enemySpawnPoints[i % gameState.enemySpawnPoints.length];
+      enemy.active = true;
+      enemy.x = spawnPoint.x;
+      enemy.y = spawnPoint.y;
+      enemy.dirX = 0;
+      enemy.dirY = 1;
+      enemy.fireCooldown = 0.55 + i * 0.18;
+      enemy.moveCooldown = 0.12 * i;
+      enemy.hp = 1;
+      retargetEnemy(enemy, gameState.player);
+    } else {
+      enemy.active = false;
+    }
+  }
+  gameState.enemiesRemaining = activeCount;
+  gameState.waveClearTimer = 0;
+  statusValue.textContent = `第 ${gameState.wave} 波进攻中`;
+}
+
+function syncHud() {
+  const playerHp = Math.max(0, gameState.player.hp);
+  const baseHp = Math.max(0, gameState.baseHp);
+
+  healthValue.textContent = `${playerHp} / ${PLAYER_MAX_HP}`;
+  healthBar.style.width = `${(playerHp / PLAYER_MAX_HP) * 100}%`;
+  scoreValue.textContent = String(gameState.score);
+  waveValue.textContent = String(gameState.wave);
+  baseBar.style.width = `${(baseHp / BASE_MAX_HP) * 100}%`;
+
+  if (gameState.mode === "running" && gameState.enemiesRemaining > 0) {
+    statusValue.textContent = `大地图追击中，剩余敌军 ${gameState.enemiesRemaining}`;
+  }
+}
+
+function spawnBullet(pool, x, y, dirX, dirY, owner) {
+  const bullet = pool.find((item) => !item.active);
+  if (!bullet) {
+    return;
+  }
+  bullet.active = true;
+  bullet.owner = owner;
+  bullet.x = x;
+  bullet.y = y;
+  bullet.vx = dirX * BULLET_SPEED;
+  bullet.vy = dirY * BULLET_SPEED;
 }
 
 function canTravel(entity, dirX, dirY, distance = TILE * 0.75) {
@@ -338,10 +388,23 @@ function retargetEnemy(enemy, player) {
   enemy.dirY = 1;
 }
 
+function updateCamera() {
+  const player = gameState.player;
+  camera.x = Math.max(
+    0,
+    Math.min(WORLD_WIDTH - VIEWPORT_WIDTH, player.x - VIEWPORT_WIDTH / 2)
+  );
+  camera.y = Math.max(
+    0,
+    Math.min(WORLD_HEIGHT - VIEWPORT_HEIGHT, player.y - VIEWPORT_HEIGHT / 2)
+  );
+}
+
 function updatePlayer(dt) {
   const player = gameState.player;
   let moveX = 0;
   let moveY = 0;
+
   if (keys.has("KeyW") || keys.has("ArrowUp")) {
     moveY -= 1;
   }
@@ -361,12 +424,14 @@ function updatePlayer(dt) {
     moveY /= length;
     player.dirX = moveX;
     player.dirY = moveY;
+
     const nextX = player.x + moveX * PLAYER_SPEED * dt;
     const nextY = player.y + moveY * PLAYER_SPEED * dt;
-    if (!overlapsObstacle(player, nextX, player.y)) {
+
+    if (!overlapsObstacle(player, nextX, player.y) && !overlapsBaseAt(player.size, nextX, player.y)) {
       player.x = nextX;
     }
-    if (!overlapsObstacle(player, player.x, nextY)) {
+    if (!overlapsObstacle(player, player.x, nextY) && !overlapsBaseAt(player.size, player.x, nextY)) {
       player.y = nextY;
     }
     clampEntity(player);
@@ -384,12 +449,13 @@ function updatePlayer(dt) {
       player.dirY,
       "player"
     );
-    player.shootCooldown = 0.28;
+    player.shootCooldown = 0.25;
   }
 }
 
 function updateEnemies(dt) {
   const player = gameState.player;
+
   for (const enemy of enemies) {
     if (!enemy.active) {
       continue;
@@ -400,23 +466,26 @@ function updateEnemies(dt) {
 
     if (enemy.moveCooldown <= 0) {
       retargetEnemy(enemy, player);
-      enemy.moveCooldown = 0.45 + Math.random() * 0.5;
+      enemy.moveCooldown = 0.4 + Math.random() * 0.45;
     }
 
     const nextX = enemy.x + enemy.dirX * ENEMY_SPEED * dt;
     const nextY = enemy.y + enemy.dirY * ENEMY_SPEED * dt;
-    if (!overlapsObstacle(enemy, nextX, enemy.y)) {
+
+    if (!overlapsObstacle(enemy, nextX, enemy.y) && !overlapsBaseAt(enemy.size, nextX, enemy.y)) {
       enemy.x = nextX;
     } else {
       retargetEnemy(enemy, player);
-      enemy.moveCooldown = 0.1;
+      enemy.moveCooldown = 0.08;
     }
-    if (!overlapsObstacle(enemy, enemy.x, nextY)) {
+
+    if (!overlapsObstacle(enemy, enemy.x, nextY) && !overlapsBaseAt(enemy.size, enemy.x, nextY)) {
       enemy.y = nextY;
     } else {
       retargetEnemy(enemy, player);
-      enemy.moveCooldown = 0.1;
+      enemy.moveCooldown = 0.08;
     }
+
     clampEntity(enemy);
 
     if (enemy.fireCooldown <= 0) {
@@ -456,11 +525,6 @@ function bulletHitsBlock(bullet) {
 
 function updateBullets(dt, pool) {
   const player = gameState.player;
-  const base = {
-    x: WIDTH / 2,
-    y: HEIGHT - 34,
-    size: BASE_SIZE
-  };
 
   for (const bullet of pool) {
     if (!bullet.active) {
@@ -478,9 +542,9 @@ function updateBullets(dt, pool) {
 
       if (
         bullet.x < -bullet.radius ||
-        bullet.x > WIDTH + bullet.radius ||
+        bullet.x > WORLD_WIDTH + bullet.radius ||
         bullet.y < -bullet.radius ||
-        bullet.y > HEIGHT + bullet.radius
+        bullet.y > WORLD_HEIGHT + bullet.radius
       ) {
         bullet.active = false;
         break;
@@ -508,10 +572,10 @@ function updateBullets(dt, pool) {
 
       if (
         bullet.owner === "enemy" &&
-        bullet.x + bullet.radius > base.x - base.size / 2 &&
-        bullet.x - bullet.radius < base.x + base.size / 2 &&
-        bullet.y + bullet.radius > base.y - base.size / 2 &&
-        bullet.y - bullet.radius < base.y + base.size / 2
+        bullet.x + bullet.radius > BASE_POSITION.x - BASE_SIZE / 2 &&
+        bullet.x - bullet.radius < BASE_POSITION.x + BASE_SIZE / 2 &&
+        bullet.y + bullet.radius > BASE_POSITION.y - BASE_SIZE / 2 &&
+        bullet.y - bullet.radius < BASE_POSITION.y + BASE_SIZE / 2
       ) {
         bullet.active = false;
         gameState.baseHp -= 1;
@@ -563,6 +627,7 @@ function updateWave(dt) {
   if (gameState.mode !== "running") {
     return;
   }
+
   if (gameState.enemiesRemaining === 0) {
     gameState.waveClearTimer -= dt;
     if (gameState.waveClearTimer <= 0) {
@@ -575,6 +640,7 @@ function updateWave(dt) {
 
 function update(dt) {
   if (gameState.mode !== "running") {
+    updateCamera();
     syncHud();
     return;
   }
@@ -584,6 +650,7 @@ function update(dt) {
   updateBullets(dt, playerBullets);
   updateBullets(dt, enemyBullets);
   updateWave(dt);
+  updateCamera();
   syncHud();
 }
 
@@ -596,16 +663,14 @@ function drawTank(entity, color, turretColor) {
   ctx.fillRect(-entity.size / 2, -entity.size / 2, entity.size, entity.size);
   ctx.fillStyle = turretColor;
   ctx.fillRect(-5, -entity.size / 2 - 10, 10, 18);
-  ctx.fillStyle = "rgba(255,255,255,0.15)";
+  ctx.fillStyle = "rgba(255,255,255,0.16)";
   ctx.fillRect(-entity.size / 2 + 4, -entity.size / 2 + 4, entity.size - 8, 8);
   ctx.restore();
 }
 
 function drawBase() {
-  const x = WIDTH / 2;
-  const y = HEIGHT - 34;
   ctx.save();
-  ctx.translate(x, y);
+  ctx.translate(BASE_POSITION.x, BASE_POSITION.y);
   ctx.fillStyle = gameState.baseHp > 1 ? "#f4d35e" : "#ff6f59";
   ctx.fillRect(-BASE_SIZE / 2, -BASE_SIZE / 2, BASE_SIZE, BASE_SIZE);
   ctx.fillStyle = "#4d2d12";
@@ -616,12 +681,17 @@ function drawBase() {
 
 function drawBattlefield() {
   ctx.fillStyle = "#1a4028";
-  ctx.fillRect(0, 0, WIDTH, HEIGHT);
+  ctx.fillRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
 
-  for (let y = 0; y < HEIGHT; y += TILE) {
-    for (let x = 0; x < WIDTH; x += TILE) {
-      ctx.fillStyle = (x / TILE + y / TILE) % 2 === 0 ? "#234c2f" : "#1d432b";
-      ctx.fillRect(x, y, TILE, TILE);
+  const startCol = Math.max(0, Math.floor(camera.x / TILE) - 1);
+  const endCol = Math.min(WORLD_COLS, Math.ceil((camera.x + VIEWPORT_WIDTH) / TILE) + 1);
+  const startRow = Math.max(0, Math.floor(camera.y / TILE) - 1);
+  const endRow = Math.min(WORLD_ROWS, Math.ceil((camera.y + VIEWPORT_HEIGHT) / TILE) + 1);
+
+  for (let row = startRow; row < endRow; row += 1) {
+    for (let col = startCol; col < endCol; col += 1) {
+      ctx.fillStyle = (col + row) % 2 === 0 ? "#234c2f" : "#1d432b";
+      ctx.fillRect(col * TILE, row * TILE, TILE, TILE);
     }
   }
 
@@ -646,23 +716,9 @@ function drawBullets(pool, color) {
   }
 }
 
-function drawOverlay() {
-  if (gameState.mode === "running") {
-    return;
-  }
-
-  ctx.fillStyle = "rgba(4, 10, 20, 0.72)";
-  ctx.fillRect(0, 0, WIDTH, HEIGHT);
-
-  ctx.fillStyle = "#fff5da";
-  ctx.textAlign = "center";
-  ctx.font = '24px "Press Start 2P"';
-  ctx.fillText(gameState.mode === "lost" ? "GAME OVER" : "STAGE CLEAR", WIDTH / 2, HEIGHT / 2 - 10);
-  ctx.font = '16px "Noto Sans SC"';
-  ctx.fillText("点击右侧按钮重新开始", WIDTH / 2, HEIGHT / 2 + 34);
-}
-
-function render() {
+function drawWorld() {
+  ctx.save();
+  ctx.translate(-camera.x, -camera.y);
   drawBattlefield();
   drawBase();
   const player = gameState.player;
@@ -675,7 +731,98 @@ function render() {
   }
   drawBullets(playerBullets, "#ffe066");
   drawBullets(enemyBullets, "#ffd6d6");
+  ctx.restore();
+}
+
+function drawViewportChrome() {
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.18)";
+  ctx.lineWidth = 4;
+  ctx.strokeRect(2, 2, VIEWPORT_WIDTH - 4, VIEWPORT_HEIGHT - 4);
+
+  ctx.fillStyle = "rgba(4, 16, 28, 0.68)";
+  ctx.fillRect(18, 18, 190, 40);
+  ctx.fillStyle = "#f4f8ff";
+  ctx.font = '12px "Press Start 2P"';
+  ctx.fillText("MEGA MAP", 30, 44);
+}
+
+function drawOverlay() {
+  if (gameState.mode === "running") {
+    return;
+  }
+
+  ctx.fillStyle = "rgba(4, 10, 20, 0.72)";
+  ctx.fillRect(0, 0, VIEWPORT_WIDTH, VIEWPORT_HEIGHT);
+  ctx.fillStyle = "#fff5da";
+  ctx.textAlign = "center";
+  ctx.font = '24px "Press Start 2P"';
+  ctx.fillText(
+    gameState.mode === "lost" ? "GAME OVER" : "STAGE CLEAR",
+    VIEWPORT_WIDTH / 2,
+    VIEWPORT_HEIGHT / 2 - 10
+  );
+  ctx.font = '16px "Noto Sans SC"';
+  ctx.fillText("点击右侧按钮重新开始", VIEWPORT_WIDTH / 2, VIEWPORT_HEIGHT / 2 + 34);
+  ctx.textAlign = "left";
+}
+
+function renderMinimap() {
+  const width = minimapCanvas.width;
+  const height = minimapCanvas.height;
+  const scaleX = width / WORLD_WIDTH;
+  const scaleY = height / WORLD_HEIGHT;
+
+  minimapCtx.clearRect(0, 0, width, height);
+  minimapCtx.fillStyle = "#10263d";
+  minimapCtx.fillRect(0, 0, width, height);
+
+  minimapCtx.fillStyle = "#244b32";
+  minimapCtx.fillRect(4, 4, width - 8, height - 8);
+
+  for (const block of obstacles) {
+    if (!block.alive) {
+      continue;
+    }
+    minimapCtx.fillStyle = block.kind === "brick" ? "#ad6a3a" : "#8d9aa9";
+    minimapCtx.fillRect(block.x * scaleX, block.y * scaleY, block.w * scaleX, block.h * scaleY);
+  }
+
+  minimapCtx.fillStyle = "#ffd166";
+  minimapCtx.fillRect(
+    (BASE_POSITION.x - BASE_SIZE / 2) * scaleX,
+    (BASE_POSITION.y - BASE_SIZE / 2) * scaleY,
+    BASE_SIZE * scaleX,
+    BASE_SIZE * scaleY
+  );
+
+  minimapCtx.fillStyle = "#ff6b6b";
+  for (const enemy of enemies) {
+    if (!enemy.active) {
+      continue;
+    }
+    minimapCtx.fillRect((enemy.x - 4) * scaleX, (enemy.y - 4) * scaleY, 8 * scaleX, 8 * scaleY);
+  }
+
+  const player = gameState.player;
+  minimapCtx.fillStyle = "#59f2b1";
+  minimapCtx.fillRect((player.x - 5) * scaleX, (player.y - 5) * scaleY, 10 * scaleX, 10 * scaleY);
+
+  minimapCtx.strokeStyle = "rgba(255, 255, 255, 0.85)";
+  minimapCtx.lineWidth = 1.5;
+  minimapCtx.strokeRect(
+    camera.x * scaleX,
+    camera.y * scaleY,
+    VIEWPORT_WIDTH * scaleX,
+    VIEWPORT_HEIGHT * scaleY
+  );
+}
+
+function render() {
+  ctx.clearRect(0, 0, VIEWPORT_WIDTH, VIEWPORT_HEIGHT);
+  drawWorld();
+  drawViewportChrome();
   drawOverlay();
+  renderMinimap();
 }
 
 function frame(timestamp) {

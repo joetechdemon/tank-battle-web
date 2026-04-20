@@ -18,7 +18,7 @@
         <p class="eyebrow">JOETECHDEMON ARCADE</p>
         <h1>坦克大战：钢铁防线</h1>
         <p class="lede">
-          守住基地，清理敌军。支持键盘移动、射击、波次推进和重新开始。
+          守住基地，清理敌军。现在升级为大地图战场，支持镜头跟随、小地图雷达和波次推进。
         </p>
       </section>
 
@@ -61,10 +61,20 @@
         <aside class="side-panel">
           <button id="restartButton" type="button">重新开始</button>
           <div class="tip-box">
+            <h2>战场雷达</h2>
+            <canvas
+              id="minimapCanvas"
+              width="240"
+              height="160"
+              aria-label="战场小地图"
+            ></canvas>
+            <p>绿色是玩家，红色是敌军，白框是当前视野范围。</p>
+          </div>
+          <div class="tip-box">
             <h2>操作说明</h2>
             <p><kbd>W A S D</kbd> 或 <kbd>↑ ↓ ← →</kbd> 控制移动</p>
             <p><kbd>J</kbd> 或 <kbd>Space</kbd> 发射炮弹</p>
-            <p>击破砖墙开路，避开敌军炮火，保护底部基地。</p>
+            <p>击破砖墙开路，利用大地图迂回推进，保护底部基地。</p>
           </div>
           <div class="tip-box">
             <h2>胜负条件</h2>
