@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>坦克大战：钢铁防线</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Noto+Sans+SC:wght@400;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="hero">
+        <p class="eyebrow">JOETECHDEMON ARCADE</p>
+        <h1>坦克大战：钢铁防线</h1>
+        <p class="lede">
+          守住基地，清理敌军。支持键盘移动、射击、波次推进和重新开始。
+        </p>
+      </section>
+
+      <section class="dashboard" aria-label="游戏信息">
+        <div class="stat-card">
+          <span class="stat-label">生命</span>
+          <strong id="healthValue">3</strong>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">得分</span>
+          <strong id="scoreValue">0</strong>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">波次</span>
+          <strong id="waveValue">1</strong>
+        </div>
+        <div class="stat-card status-card">
+          <span class="stat-label">状态</span>
+          <strong id="statusValue">准备开火</strong>
+        </div>
+      </section>
+
+      <section class="game-panel">
+        <div class="canvas-frame">
+          <canvas
+            id="gameCanvas"
+            width="832"
+            height="576"
+            aria-label="坦克大战游戏画面"
+          ></canvas>
+          <div class="scanline"></div>
+        </div>
+
+        <aside class="side-panel">
+          <button id="restartButton" type="button">重新开始</button>
+          <div class="tip-box">
+            <h2>操作说明</h2>
+            <p><kbd>W A S D</kbd> 或 <kbd>↑ ↓ ← →</kbd> 控制移动</p>
+            <p><kbd>J</kbd> 或 <kbd>Space</kbd> 发射炮弹</p>
+            <p>击破砖墙开路，避开敌军炮火，保护底部基地。</p>
+          </div>
+          <div class="tip-box">
+            <h2>胜负条件</h2>
+            <p>消灭当前波次全部敌人即可进入下一波。</p>
+            <p>你的生命归零，或基地被击毁，游戏结束。</p>
+          </div>
+        </aside>
+      </section>
+    </main>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
